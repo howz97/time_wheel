@@ -1,2 +1,2 @@
 # timer
-timer implemented by time-wheel algorithm
+An implementation of timer uses time-wheel algorithm
