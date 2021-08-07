@@ -9,7 +9,7 @@ pub struct FrontEnd {
     unused_id: usize,
     join_handle: Option<thread::JoinHandle<()>>,
     sender: channel::Sender<Message>,
-    receiver: channel::Receiver<Timer>,
+    pub receiver: channel::Receiver<Timer>,
 }
 
 impl FrontEnd {
@@ -36,20 +36,6 @@ impl FrontEnd {
     // Delete timer
     pub fn del_timer(&mut self, timer_id: usize) {
         self.sender.send(Message::Del(timer_id)).unwrap();
-    }
-
-    // Receive a trigger timer
-    pub fn rcv_timer(&mut self) -> Timer {
-        self.receiver.recv().unwrap()
-    }
-
-    // Try receive a trigger timer
-    pub fn try_rcv_timer(&mut self) -> Option<Timer> {
-        if let Ok(tmr) = self.receiver.try_recv() {
-            Some(tmr)
-        } else {
-            None
-        }
     }
 }
 
@@ -201,8 +187,7 @@ impl BackEnd {
 
     fn run(mut self) {
         loop {
-            let timeout = self.wheels[0].next_ts - unix_now_ms();
-            let got = self.receiver.recv_timeout(timeout);
+            let got = self.receiver.recv_timeout(self.calc_wait_timeout());
             trace!("BackEnd got something at {:?}", unix_now_ms());
             match got {
                 Ok(op) => {
@@ -225,6 +210,15 @@ impl BackEnd {
         }
     }
 
+    fn calc_wait_timeout(&self) -> Duration {
+        let now = unix_now_ms();
+        if self.wheels[0].next_ts <= now {
+            Duration::new(0, 0)
+        } else {
+            self.wheels[0].next_ts - now
+        }
+    }
+
     fn check_wheel(&mut self) {
         trace!("BackEnd.check_wheel");
         let mut triggered = Vec::new();
@@ -235,7 +229,7 @@ impl BackEnd {
             triggered = wheel.check_timer();
         }
         while let Some(t) = triggered.pop() {
-            trace!("BackEnd.check_wheel sending {:?}", t);
+            info!("BackEnd.check_wheel sending {:?}, error={:?}", t, unix_now_ms()-t.when);
             self.sender.send(t).unwrap();
         }
     }
