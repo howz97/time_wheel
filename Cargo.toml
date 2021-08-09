@@ -1,5 +1,5 @@
 [package]
-name = "timer"
+name = "time_wheel"
 version = "0.1.0"
 authors = ["howz97 <964701944@qq.com>"]
 edition = "2018"

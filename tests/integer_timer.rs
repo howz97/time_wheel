@@ -2,7 +2,7 @@ use env_logger;
 use hashbrown::HashMap;
 use rand;
 use std::time::Duration;
-use timer::{unix_now_ms, FrontEnd};
+use time_wheel::{unix_now_ms, FrontEnd};
 
 #[test]
 fn integer_timer() {
