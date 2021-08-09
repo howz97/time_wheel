@@ -5,7 +5,7 @@ authors = ["howz97 <964701944@qq.com>"]
 edition = "2018"
 description = "An implementation of timer uses time-wheel algorithm"
 readme = "README.md"
-repository = "https://github.com/howz97/timer"
+repository = "https://github.com/howz97/time_wheel"
 license = "MIT"
 keywords = ["timer", "time-wheel"]
 
