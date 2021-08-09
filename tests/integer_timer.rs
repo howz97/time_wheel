@@ -1,20 +1,49 @@
-use timer::{FrontEnd, unix_now_ms};
-use std::time::{Duration};
-use log::{info};
 use env_logger;
+use hashbrown::HashMap;
 use rand;
+use std::time::Duration;
+use timer::{unix_now_ms, FrontEnd};
 
+#[test]
 fn integer_timer() {
+    const TW_INTER_MILLS: u64 = 32;
+    const WHEEL_SIZE: usize = 60;
+    const WHEEL_LVL: usize = 3;
+
+    const TMR_COUNT: u32 = 200;
+    const TMR_DELAY_RANG: u64 = 60000;
+
     env_logger::init();
-    let mut fe = FrontEnd::new(Duration::from_millis(8), 60, 3);
-    for _ in 1..100000 {
-        let delay_secs = rand::random::<u64>()%300;
-        fe.put_timer(Duration::from_secs(delay_secs));
+    let mut fe = FrontEnd::new(Duration::from_millis(TW_INTER_MILLS), WHEEL_SIZE, WHEEL_LVL);
+    let mut timer_set = HashMap::new();
+
+    // create TMR_COUNT timers
+    for _ in 0..TMR_COUNT {
+        let delay_mills = rand::random::<u64>() % TMR_DELAY_RANG;
+        let tmr_id = fe.put_timer(Duration::from_millis(delay_mills));
+        timer_set.insert(tmr_id, ());
     }
-    while let Ok(timer) = fe.receiver.recv() {
-        if unix_now_ms() < timer.when {
-            panic!("too earlier")
+
+    // remove some timers
+    for (id, _) in timer_set.drain_filter(|&id, _| id % 10 < 3) {
+        fe.del_timer(id);
+    }
+
+    // all the left timers should trigger (check amount)
+    for _ in 0..timer_set.len() {
+        if let Ok(timer) = fe.receiver.recv() {
+            if unix_now_ms() < timer.when {
+                panic!("too earlier")
+            }
+            println!(
+                " error={:?} timer trigger -> {:?}",
+                unix_now_ms() - timer.when,
+                timer
+            );
+            timer_set.remove(&timer.id).expect("timer loss");
+        } else {
+            panic!("receive error")
         }
-        info!(" error={:?} timer trigger -> {:?}", unix_now_ms() - timer.when, timer)
     }
+    assert_eq!(timer_set.len(), 0)
 }

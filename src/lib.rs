@@ -1,9 +1,9 @@
 use crossbeam::channel;
-use crossbeam::channel::{RecvTimeoutError};
-use std::thread;
-use std::time::{SystemTime, UNIX_EPOCH, Duration};
+use crossbeam::channel::RecvTimeoutError;
 use hashbrown::HashMap;
 use log::{info, trace, warn};
+use std::thread;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub struct FrontEnd {
     unused_id: usize,
@@ -46,7 +46,11 @@ pub fn unix_now_ms() -> Duration {
 impl Drop for FrontEnd {
     fn drop(&mut self) {
         self.sender.send(Message::Exit).unwrap();
-        self.join_handle.take().unwrap().join().expect("time_wheel: backend thread panicked");
+        self.join_handle
+            .take()
+            .unwrap()
+            .join()
+            .expect("time_wheel: backend thread panicked");
     }
 }
 
@@ -57,9 +61,9 @@ enum Message {
 }
 
 struct BackEnd {
-    wheels:   Vec<Wheel>,
+    wheels: Vec<Wheel>,
     receiver: channel::Receiver<Message>,
-    sender:   channel::Sender<Timer>,
+    sender: channel::Sender<Timer>,
 }
 
 #[derive(Debug)]
@@ -67,7 +71,7 @@ struct Wheel {
     index: usize,
     slots: Vec<HashMap<usize, Timer>>,
     cur_slot: usize,
-    next_ts:  Duration, // is this necessary ？
+    next_ts: Duration, // is this necessary ？
     interval: Duration,
 }
 
@@ -77,7 +81,7 @@ impl Wheel {
         for _ in 0..size {
             slots.push(HashMap::new())
         }
-        Wheel{
+        Wheel {
             index,
             slots,
             cur_slot: 0,
@@ -107,7 +111,12 @@ impl Wheel {
 
     fn put_timer(&mut self, timer: Timer) -> Result<(), Timer> {
         if let Ok(pos) = self.calc_timer_pos(timer.when) {
-            trace!("BackEnd.put_timer {:?} into wheel({})-slot({})", timer, self.index, pos);
+            trace!(
+                "BackEnd.put_timer {:?} into wheel({})-slot({})",
+                timer,
+                self.index,
+                pos
+            );
             self.slots[pos].insert(timer.id, timer);
             Ok(())
         } else {
@@ -118,11 +127,11 @@ impl Wheel {
     fn calc_timer_pos(&self, when: Duration) -> Result<usize, ()> {
         let cur_ts = self.cur_ts();
         if when <= cur_ts {
-            return Ok(1)
+            return Ok(1);
         }
-        let pos = (((when - cur_ts).as_nanos()/self.interval.as_nanos()) + 1) as usize;
+        let pos = (((when - cur_ts).as_nanos() / self.interval.as_nanos()) + 1) as usize;
         if pos > self.slots.len() {
-            return Err(())
+            return Err(());
         }
         Ok((self.cur_slot + pos) % self.slots.len())
     }
@@ -131,8 +140,15 @@ impl Wheel {
         let mut triggered = Vec::new();
         while self.try_forward() {
             let cur_ts = self.cur_ts();
-            trace!("BackEnd wheel do forward: cur_ts={:?} now={:?}", cur_ts, self);
-            let drained: HashMap<usize, Timer> = self.cur_slot_map().drain_filter(|_, t| t.when < cur_ts).collect();
+            trace!(
+                "BackEnd wheel do forward: cur_ts={:?} now={:?}",
+                cur_ts,
+                self
+            );
+            let drained: HashMap<usize, Timer> = self
+                .cur_slot_map()
+                .drain_filter(|_, t| t.when < cur_ts)
+                .collect();
             let tmp = drained.values().cloned().collect::<Vec<_>>();
             triggered = [triggered, tmp].concat();
             trace!("BackEnd wheel do forward: triggered timer {:?}", triggered);
@@ -149,13 +165,13 @@ pub struct Timer {
 
 impl Timer {
     fn new(id: usize, when: Duration) -> Timer {
-        Timer{id, when}
+        Timer { id, when }
     }
 }
 
 impl Clone for Timer {
     fn clone(&self) -> Timer {
-        Timer{..*self}
+        Timer { ..*self }
     }
 }
 
@@ -190,21 +206,19 @@ impl BackEnd {
             let got = self.receiver.recv_timeout(self.calc_wait_timeout());
             trace!("BackEnd got something at {:?}", unix_now_ms());
             match got {
-                Ok(op) => {
-                    match op {
-                        Message::Put(timer_id, when) => self.put_timer(timer_id, when),
-                        Message::Del(timer_id) => self.del_timer(timer_id),
-                        Message::Exit => {
-                            info!("BackEnd received Exit");
-                            break
-                        },
+                Ok(op) => match op {
+                    Message::Put(timer_id, when) => self.put_timer(timer_id, when),
+                    Message::Del(timer_id) => self.del_timer(timer_id),
+                    Message::Exit => {
+                        info!("BackEnd received Exit");
+                        break;
                     }
-                }
+                },
                 Err(RecvTimeoutError::Disconnected) => {
                     warn!("BackEnd received Disconnected");
-                    break
-                },
-                _ => trace!("BackEnd timeout: need check timers now={:?}", unix_now_ms())
+                    break;
+                }
+                _ => trace!("BackEnd timeout: need check timers now={:?}", unix_now_ms()),
             }
             self.check_wheel();
         }
@@ -224,12 +238,18 @@ impl BackEnd {
         let mut triggered = Vec::new();
         for (_, wheel) in self.wheels.iter_mut().enumerate().rev() {
             while let Some(t) = triggered.pop() {
-                wheel.put_timer(t).expect("put timer into lower wheel failed");
+                wheel
+                    .put_timer(t)
+                    .expect("put timer into lower wheel failed");
             }
             triggered = wheel.check_timer();
         }
         while let Some(t) = triggered.pop() {
-            info!("BackEnd.check_wheel sending {:?}, error={:?}", t, unix_now_ms()-t.when);
+            trace!(
+                "BackEnd.check_wheel sending {:?}, error={:?}",
+                t,
+                unix_now_ms() - t.when
+            );
             self.sender.send(t).unwrap();
         }
     }
@@ -241,13 +261,17 @@ impl BackEnd {
             if let Err(timer) = put_result {
                 put_result = wheel.put_timer(timer);
             } else {
-                break
+                break;
             }
         }
         if let Err(timer) = put_result {
             // insert timer that overflowed into tail slot
             warn!("insert timer={:?} that overflowed into tail slot", timer);
-            self.wheels.last_mut().unwrap().cur_slot_map().insert(timer.id, timer);
+            self.wheels
+                .last_mut()
+                .unwrap()
+                .cur_slot_map()
+                .insert(timer.id, timer);
         }
     }
 
@@ -256,7 +280,7 @@ impl BackEnd {
         for wheel in self.wheels.iter_mut() {
             for slot in wheel.slots.iter_mut() {
                 if let Some(_) = slot.remove(&id) {
-                    return
+                    return;
                 }
             }
         }
