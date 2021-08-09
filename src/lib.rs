@@ -203,9 +203,7 @@ impl BackEnd {
 
     fn run(mut self) {
         loop {
-            let got = self.receiver.recv_timeout(self.calc_wait_timeout());
-            trace!("BackEnd got something at {:?}", unix_now_ms());
-            match got {
+            match self.receiver.recv_timeout(self.calc_wait_timeout()) {
                 Ok(op) => match op {
                     Message::Put(timer_id, when) => self.put_timer(timer_id, when),
                     Message::Del(timer_id) => self.del_timer(timer_id),
