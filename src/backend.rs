@@ -2,6 +2,7 @@ use crossbeam::channel;
 use crossbeam::channel::RecvTimeoutError;
 use hashbrown::HashMap;
 use log::{info, trace, warn};
+use std::fmt;
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -88,34 +89,32 @@ impl Wheel {
                 .cur_slot_map()
                 .drain_filter(|_, t| t.when < cur_ts)
                 .collect();
-            let tmp = drained.values().cloned().collect::<Vec<_>>();
-            triggered = [triggered, tmp].concat();
+            for (_, t) in drained {
+                triggered.push(t)
+            }
             trace!("BackEnd wheel do forward: triggered timer {:?}", triggered);
         }
         triggered
     }
 }
 
-#[derive(Debug)]
 pub struct Timer {
     pub id: usize,
     pub when: Duration,
+    pub opt_f: Option<Box<dyn FnOnce(Timer) + Send + 'static>>,
 }
 
-impl Timer {
-    fn new(id: usize, when: Duration) -> Timer {
-        Timer { id, when }
-    }
-}
-
-impl Clone for Timer {
-    fn clone(&self) -> Timer {
-        Timer { ..*self }
+impl fmt::Debug for Timer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("Timer")
+            .field(&self.id)
+            .field(&self.when)
+            .finish()
     }
 }
 
 pub enum Message {
-    Put(usize, Duration),
+    Put(Timer),
     Del(usize),
     Exit,
 }
@@ -156,8 +155,8 @@ impl BackEnd {
         loop {
             match self.receiver.recv_timeout(self.calc_wait_timeout()) {
                 Ok(op) => match op {
-                    Message::Put(timer_id, when) => self.put_timer(timer_id, when),
-                    Message::Del(timer_id) => self.del_timer(timer_id),
+                    Message::Put(t) => self.put_timer(t),
+                    Message::Del(id) => self.del_timer(id),
                     Message::Exit => {
                         info!("BackEnd received Exit");
                         break;
@@ -184,27 +183,35 @@ impl BackEnd {
 
     fn check_wheel(&mut self) {
         trace!("BackEnd.check_wheel");
-        let mut triggered = Vec::new();
+        let mut trigger = Vec::new();
         for (_, wheel) in self.wheels.iter_mut().enumerate().rev() {
-            while let Some(t) = triggered.pop() {
+            while let Some(t) = trigger.pop() {
                 wheel
                     .put_timer(t)
                     .expect("put timer into lower wheel failed");
             }
-            triggered = wheel.check_timer();
+            trigger = wheel.check_timer();
         }
-        while let Some(t) = triggered.pop() {
-            trace!(
-                "BackEnd.check_wheel sending {:?}, error={:?}",
-                t,
-                unix_now_ms() - t.when
-            );
-            self.sender.send(t).unwrap();
+        while let Some(t) = trigger.pop() {
+            self.trigger(t);
         }
     }
 
-    fn put_timer(&mut self, id: usize, when: Duration) {
-        let mut put_result = Err(Timer::new(id, when));
+    fn trigger(&self, mut timer: Timer) {
+        trace!(
+            "BackEnd.check_wheel sending {:?}, error={:?}",
+            timer,
+            unix_now_ms() - timer.when
+        );
+        if let Some(f) = timer.opt_f.take() {
+            f(timer); // it should return instantly
+        } else {
+            self.sender.send(timer).unwrap();
+        }
+    }
+
+    fn put_timer(&mut self, timer: Timer) {
+        let mut put_result = Err(timer);
         // try wheel from low to high
         for wheel in self.wheels.iter_mut() {
             if let Err(timer) = put_result {

@@ -3,17 +3,19 @@ use hashbrown::HashMap;
 use rand;
 use std::time::Duration;
 use time_wheel::{unix_now_ms, FrontEnd};
+use std::thread::sleep;
+
+const TW_INTER_MILLS: u64 = 32;
+const WHEEL_SIZE: usize = 60;
+const WHEEL_LVL: usize = 4;
 
 #[test]
 fn integer_timer() {
-    const TW_INTER_MILLS: u64 = 32;
-    const WHEEL_SIZE: usize = 60;
-    const WHEEL_LVL: usize = 3;
+    env_logger::init();
 
     const TMR_COUNT: u32 = 200;
     const TMR_DELAY_RANG: u64 = 60000;
 
-    env_logger::init();
     let mut fe = FrontEnd::new(Duration::from_millis(TW_INTER_MILLS), WHEEL_SIZE, WHEEL_LVL);
     let mut timer_set = HashMap::new();
 
@@ -46,4 +48,17 @@ fn integer_timer() {
         }
     }
     assert_eq!(timer_set.len(), 0)
+}
+
+#[test]
+fn integer_after_func() {
+    let mut fe = FrontEnd::new(Duration::from_millis(TW_INTER_MILLS), WHEEL_SIZE, WHEEL_LVL);
+    fe.after_func(Duration::from_millis(100), |t| {
+        println!(
+            " error={:?} func trigger -> {:?}",
+            unix_now_ms() - t.when,
+            t
+        );
+    });
+    sleep(Duration::from_secs(1));
 }
