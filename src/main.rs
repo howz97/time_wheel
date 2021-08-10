@@ -1,7 +1,3 @@
-# timer
-An implementation of timer uses time-wheel algorithm
-
-```rust
 use std::time::{Duration, SystemTime};
 use time_wheel::FrontEnd;
 
@@ -15,11 +11,3 @@ fn main() {
     println!("Trigger {:?}", timer);
     println!("cost {:?}", time0.elapsed().unwrap());
 }
-```
-
-output
-```text
-timer_id = 1
-Trigger Timer(1, 1628603696.593087s)
-cost 1.507511s
-```
