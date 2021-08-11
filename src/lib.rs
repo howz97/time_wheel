@@ -40,7 +40,8 @@ impl FrontEnd {
     }
 
     pub fn after_func<F>(&mut self, delay: Duration, f: F)
-    where F: FnOnce(Timer) + Send + 'static
+    where
+        F: FnOnce(Timer) + Send + 'static,
     {
         let timer = Timer::after_func(self.unused_id, unix_now_ms() + delay, f);
         self.sender.send(Message::Put(timer)).unwrap();

@@ -106,7 +106,7 @@ pub struct Timer {
 
 impl Timer {
     pub fn normal(id: usize, when: Duration) -> Self {
-        Timer{
+        Timer {
             id,
             when,
             opt_f: None,
@@ -114,9 +114,10 @@ impl Timer {
     }
 
     pub fn after_func<F>(id: usize, when: Duration, f: F) -> Self
-    where F: FnOnce(Timer) + Send + 'static
+    where
+        F: FnOnce(Timer) + Send + 'static,
     {
-        Timer{
+        Timer {
             id,
             when,
             opt_f: Some(Box::new(f)),

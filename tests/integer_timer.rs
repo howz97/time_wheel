@@ -1,9 +1,9 @@
 use env_logger;
 use hashbrown::HashMap;
 use rand;
+use std::thread::sleep;
 use std::time::Duration;
 use time_wheel::{unix_now_ms, FrontEnd};
-use std::thread::sleep;
 
 const TW_INTER_MILLS: u64 = 32;
 const WHEEL_SIZE: usize = 60;
