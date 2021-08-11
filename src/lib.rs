@@ -14,7 +14,7 @@ pub struct FrontEnd {
 }
 
 impl FrontEnd {
-    pub fn new(interval: Duration, size: usize, lv: usize) -> FrontEnd {
+    pub fn new(interval: Duration, size: usize, lv: usize) -> Self {
         let (op_sdr, op_rcv) = channel::bounded(0);
         let (tmr_sdr, tmr_rcv) = channel::unbounded();
         FrontEnd {
@@ -28,11 +28,7 @@ impl FrontEnd {
     // Put a timer into TimeWheel by specify delay, return the timer_id
     pub fn put_timer(&mut self, delay: Duration) -> usize {
         let id = self.unused_id;
-        let timer = Timer {
-            id,
-            when: unix_now_ms() + delay,
-            opt_f: None,
-        };
+        let timer = Timer::normal(id, unix_now_ms() + delay);
         self.sender.send(Message::Put(timer)).unwrap();
         self.unused_id += 1;
         id
@@ -46,11 +42,7 @@ impl FrontEnd {
     pub fn after_func<F>(&mut self, delay: Duration, f: F)
     where F: FnOnce(Timer) + Send + 'static
     {
-        let timer = Timer {
-            id: self.unused_id,
-            when: unix_now_ms() + delay,
-            opt_f: Some(Box::new(f)),
-        };
+        let timer = Timer::after_func(self.unused_id, unix_now_ms() + delay, f);
         self.sender.send(Message::Put(timer)).unwrap();
         self.unused_id += 1;
     }

@@ -16,7 +16,7 @@ struct Wheel {
 }
 
 impl Wheel {
-    fn new(index: usize, now: Duration, interval: Duration, size: usize) -> Wheel {
+    fn new(index: usize, now: Duration, interval: Duration, size: usize) -> Self {
         let mut slots = Vec::with_capacity(size);
         for _ in 0..size {
             slots.push(HashMap::new())
@@ -101,7 +101,27 @@ impl Wheel {
 pub struct Timer {
     pub id: usize,
     pub when: Duration,
-    pub opt_f: Option<Box<dyn FnOnce(Timer) + Send + 'static>>,
+    opt_f: Option<Box<dyn FnOnce(Timer) + Send + 'static>>,
+}
+
+impl Timer {
+    pub fn normal(id: usize, when: Duration) -> Self {
+        Timer{
+            id,
+            when,
+            opt_f: None,
+        }
+    }
+
+    pub fn after_func<F>(id: usize, when: Duration, f: F) -> Self
+    where F: FnOnce(Timer) + Send + 'static
+    {
+        Timer{
+            id,
+            when,
+            opt_f: Some(Box::new(f)),
+        }
+    }
 }
 
 impl fmt::Debug for Timer {
