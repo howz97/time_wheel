@@ -25,7 +25,7 @@ impl FrontEnd {
         }
     }
 
-    // Put a timer into TimeWheel by specify trigger_after, return the timer_id
+    // Put a timer into TimeWheel by specify delay, return the timer_id
     pub fn put_timer(&mut self, delay: Duration) -> usize {
         let id = self.unused_id;
         let timer = Timer {
