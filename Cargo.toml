@@ -1,6 +1,6 @@
 [package]
 name = "time_wheel"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["howz97 <964701944@qq.com>"]
 edition = "2018"
 description = "An implementation of timer uses time-wheel algorithm"
