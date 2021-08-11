@@ -1,5 +1,5 @@
 use crossbeam::channel;
-use crossbeam::channel::RecvTimeoutError;
+use crossbeam::channel::{RecvTimeoutError, TrySendError};
 use hashbrown::HashMap;
 use log::{info, trace, warn};
 use std::fmt;
@@ -101,7 +101,11 @@ impl Wheel {
 pub struct Timer {
     pub id: usize,
     pub when: Duration,
+
     opt_f: Option<Box<dyn FnOnce(Timer) + Send + 'static>>,
+
+    period: Duration,
+    sender: Option<channel::Sender<Duration>>,
 }
 
 impl Timer {
@@ -110,6 +114,8 @@ impl Timer {
             id,
             when,
             opt_f: None,
+            period: Duration::new(0, 0),
+            sender: None,
         }
     }
 
@@ -121,6 +127,18 @@ impl Timer {
             id,
             when,
             opt_f: Some(Box::new(f)),
+            period: Duration::new(0, 0),
+            sender: None,
+        }
+    }
+
+    pub fn ticker(id: usize, period: Duration, sender: channel::Sender<Duration>) -> Self {
+        Timer {
+            id,
+            when: unix_now_ms() + period,
+            opt_f: None,
+            period,
+            sender: Some(sender),
         }
     }
 }
@@ -218,7 +236,7 @@ impl BackEnd {
         }
     }
 
-    fn trigger(&self, mut timer: Timer) {
+    fn trigger(&mut self, mut timer: Timer) {
         trace!(
             "BackEnd.check_wheel sending {:?}, error={:?}",
             timer,
@@ -226,6 +244,14 @@ impl BackEnd {
         );
         if let Some(f) = timer.opt_f.take() {
             f(timer); // it should return instantly
+        } else if let Some(sdr) = timer.sender.take() {
+            if let Err(TrySendError::Disconnected(_)) = sdr.try_send(timer.when) {
+                // drop ticker
+            } else {
+                timer.sender = Some(sdr);
+                timer.when += timer.period;
+                self.put_timer(timer);
+            }
         } else {
             self.sender.send(timer).unwrap();
         }

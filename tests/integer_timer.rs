@@ -62,3 +62,19 @@ fn integer_after_func() {
     });
     sleep(Duration::from_secs(1));
 }
+
+#[test]
+fn integer_ticker() {
+    let mut fe = FrontEnd::new(Duration::from_millis(TW_INTER_MILLS), WHEEL_SIZE, WHEEL_LVL);
+    let ticker = fe.ticker(Duration::from_millis(100));
+    for i in 0..20 {
+        let when = ticker.recv().unwrap();
+        println!("on tick {} error={:?}", i, unix_now_ms() - when);
+    }
+
+    sleep(Duration::from_secs(1));
+    drop(fe);
+    let when = ticker.recv().unwrap();
+    println!("last tick error={:?}", unix_now_ms() - when);
+    assert!(ticker.try_recv().unwrap_err().is_disconnected());
+}

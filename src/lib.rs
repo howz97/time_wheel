@@ -47,6 +47,14 @@ impl FrontEnd {
         self.sender.send(Message::Put(timer)).unwrap();
         self.unused_id += 1;
     }
+
+    pub fn ticker(&mut self, period: Duration) -> channel::Receiver<Duration> {
+        let (sdr, rcv) = channel::bounded(1);
+        let timer = Timer::ticker(self.unused_id, period, sdr);
+        self.sender.send(Message::Put(timer)).unwrap();
+        self.unused_id += 1;
+        rcv
+    }
 }
 
 impl Drop for FrontEnd {
